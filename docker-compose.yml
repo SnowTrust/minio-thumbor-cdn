@@ -1,0 +1,141 @@
+version: '3.7'
+
+# starts 4 docker containers running minio server instances.
+# using nginx reverse proxy, load balancing, you can access
+# it through port 9000.
+services:
+  minio1:
+    image: minio/minio:RELEASE.2021-05-18T00-53-28Z
+    volumes:
+      - data1-1:/data1
+      - data1-2:/data2
+    expose:
+      - "9000"
+    networks:
+      - cdn
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    command: server http://minio{1...4}/data{1...2}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  minio2:
+    image: minio/minio:RELEASE.2021-05-18T00-53-28Z
+    volumes:
+      - data2-1:/data1
+      - data2-2:/data2
+    expose:
+      - "9000"
+    networks:
+      - cdn
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    command: server http://minio{1...4}/data{1...2}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  minio3:
+    image: minio/minio:RELEASE.2021-05-18T00-53-28Z
+    volumes:
+      - data3-1:/data1
+      - data3-2:/data2
+    expose:
+      - "9000"
+    networks:
+      - cdn
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    command: server http://minio{1...4}/data{1...2}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  minio4:
+    image: minio/minio:RELEASE.2021-05-18T00-53-28Z
+    volumes:
+      - data4-1:/data1
+      - data4-2:/data2
+    networks:
+      - cdn
+    expose:
+      - "9000"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    command: server http://minio{1...4}/data{1...2}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  nginx_minio:
+    image: nginx:1.19.2-alpine
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "9000:9000"
+    depends_on:
+      - minio1
+      - minio2
+      - minio3
+      - minio4
+    networks:
+      - cdn
+
+  thumbor:
+    image: minimalcompact/thumbor
+    environment:
+      - VIRTUAL_HOST=localhost
+      - CORS_ALLOW_ORIGIN=*
+      - AUTO_WEBP=True
+      - RESULT_STORAGE_STORES_UNSAFE=True
+      - LOADER=tc_aws.loaders.s3_loader
+      - STORAGE=thumbor.storages.no_storage
+      - AWS_ACCESS_KEY=minio
+      - AWS_SECRET_KEY=minio123
+      - RESULT_STORAGE=tc_aws.result_storages.s3_storage
+      - TC_AWS_ENABLE_HTTP_LOADER=False
+      - TC_AWS_STORAGE_RRS=False
+      - TC_AWS_STORAGE_SSE=False
+      - TC_AWS_ENDPOINT=nginx_minio:9000 
+      - TC_AWS_STORAGE_BUCKET=images
+      - TC_AWS_LOADER_BUCKET=thumbor
+      - TC_AWS_RESULT_STORAGE_BUCKET=thumbor_results
+      - TC_AWS_RESULT_STORAGE_ROOT_PATH=thumbor_results
+    ports: 
+      - "8000:80"
+    restart: always
+    depends_on: 
+      - nginx_minio
+      - minio1
+      - minio2
+      - minio3
+      - minio4
+    networks:
+      - cdn
+
+## By default this config uses default local driver,
+## For custom volumes replace with volume driver configuration.
+volumes:
+  data1-1:
+  data1-2:
+  data2-1:
+  data2-2:
+  data3-1:
+  data3-2:
+  data4-1:
+  data4-2:
+networks: 
+  cdn:
